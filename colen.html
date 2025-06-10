@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Streamer Saving Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-light: #f7f6e7;
+      --bg-dark: #161927;
+      --text-light: #222;
+      --text-dark: #fff;
+      --primary: #00ffc3;
+      --intro-gradient-start: #0f2027;
+      --intro-gradient-end: #2c5364;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Quicksand', sans-serif;
+      background-color: var(--bg-light);
+      color: var(--text-light);
+      transition: background 0.6s ease, color 0.6s ease;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    body.dark {
+      background-color: var(--bg-dark);
+      color: var(--text-dark);
+    }
+    .top-controls {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      gap: 10px;
+      z-index: 100;
+    }
+    .control-btn {
+      font-size: 1.5rem;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      color: var(--text-light);
+    }
+    body.dark .control-btn {
+      color: var(--text-dark);
+    }
+    .control-btn:hover {
+      transform: scale(1.2);
+    }
+
+    /* Intro Section */
+    #intro {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: linear-gradient(135deg, var(--intro-gradient-start), var(--intro-gradient-end));
+      color: var(--primary);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      opacity: 1;
+      transition: opacity 1s ease-out;
+    }
+    #intro.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .start-btn {
+      margin-top: 30px;
+      padding: 15px 30px;
+      font-size: 1.2em;
+      border: none;
+      border-radius: 12px;
+      background-color: var(--primary);
+      color: #000;
+      cursor: pointer;
+      transition: all 0.4s ease;
+      font-weight: bold;
+    }
+    .start-btn:hover {
+      transform: scale(1.05);
+      background-color: #00cfa1;
+    }
+
+    /* Audio Visualizer Container (for Avatar and Canvas) */
+    .audio-visualizer-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 360px; /* Tăng kích thước max-width để sóng nhạc có không gian */
+      height: 360px;   /* Tăng chiều cao để sóng nhạc có không gian */
+      margin: 100px auto 20px auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #circleCanvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    #avatar {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      width: 160px;
+      height: 160px;
+      object-fit: cover;
+      z-index: 2;
+      box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    }
+
+    .tracker-section {
+      width: 90%;
+      max-width: 500px;
+      text-align: center;
+      margin: 20px auto;
+      padding: 15px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 15px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      flex-grow: 1;
+    }
+    body.dark .tracker-section {
+        background: rgba(0,0,0,0.2);
+    }
+
+    .tracker-section input, .tracker-section button {
+      padding: 10px;
+      font-size: 1em;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.1);
+      margin: 6px 0;
+      width: calc(100% - 22px);
+      max-width: 300px;
+      text-align: center;
+      box-sizing: border-box;
+      background-color: var(--bg-light);
+      color: var(--text-light);
+      transition: background 0.6s ease, color 0.6s ease, border-color 0.3s ease;
+    }
+    body.dark .tracker-section input {
+      background-color: rgba(255,255,255,0.1);
+      color: var(--text-dark);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .tracker-section button {
+      background-color: var(--primary);
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+      width: 100%;
+      max-width: 300px;
+    }
+    .tracker-section button:hover {
+      transform: translateY(-2px);
+    }
+    .tracker-section .box {
+      background: rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 10px;
+      color: var(--text-light);
+      transition: background 0.6s ease, color 0.6s ease;
+    }
+    body.dark .tracker-section .box {
+      background: rgba(255,255,255,0.12);
+      color: var(--text-dark);
+    }
+    .tracker-section canvas {
+      margin-top: 15px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 10px;
+      height: 200px;
+      max-height: 220px;
+      width: 100%;
+    }
+
+    /* Popup động viên */
+    #motivateBox {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      background: rgba(0, 255, 195, 0.95);
+      color: #000;
+      padding: 18px 24px;
+      border-radius: 16px;
+      font-weight: bold;
+      font-size: 1.2em;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+      z-index: 999;
+      text-align: center;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    #motivateBox.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: auto;
+    }
+
+    /* Fireworks Canvas */
+    #fireworksCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9998; /* Dưới intro và motivateBox */
+      pointer-events: none; /* Không chặn tương tác */
+      display: none; /* Mặc định ẩn */
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .top-controls {
+        font-size: 1.2rem;
+        top: 5px;
+        left: 5px;
+      }
+      .audio-visualizer-wrapper {
+        margin-top: 80px;
+        width: 280px;
+        height: 280px;
+      }
+      #avatar {
+        width: 140px;
+        height: 140px;
+      }
+      .tracker-section {
+        padding: 10px;
+      }
+      .tracker-section input, .tracker-section button {
+        font-size: 0.95em;
+        padding: 8px;
+      }
+      #motivateBox {
+        font-size: 1em;
+        padding: 15px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <audio id="bgmusic" loop>
+    <source src="dongluc.mp3" type="audio/mpeg">
+  </audio>
+
+  <div id="intro">
+    <h1>🚀 STREAMER TOI DEN DAYYY 🚀</h1>
+    <p>mục tieu ro rang thành công de dang!</p>
+    <button class="start-btn" onclick="startNow()">Dô</button>
+  </div>
+
+  <div class="top-controls">
+    <button class="control-btn" onclick="setGoal()">🎯</button>
+    <button class="control-btn" onclick="toggleTheme()">🌗</button>
+    <button class="control-btn" onclick="toggleMusic()">🎶</button>
+  </div>
+
+  <div class="audio-visualizer-wrapper">
+    <img id="avatar" src="toidai.jpg" alt="Avatar">
+    <canvas id="circleCanvas"></canvas>
+  </div>
+
+  <div class="tracker-section">
+    <h2>hay cham moi ngay!</h2>
+    <input type="number" id="income" placeholder="Tiền kiếm được (VND)" inputmode="numeric">
+    <input type="number" id="spent" placeholder="Tiền đã tiêu (VND)" inputmode="numeric">
+    <button onclick="saveData()">💾 Bus</button>
+    <div class="box" id="goalDisplay"></div>
+    <div class="box" id="statsBox"></div>
+    <canvas id="savingChart" height="200"></canvas>
+    <button onclick="resetData()">🧹 Xoá dữ liệu</button>
+  </div>
+
+  <div id="motivateBox"></div>
+  <canvas id="fireworksCanvas"></canvas>
+
+  <script>
+    const audio = document.getElementById('bgmusic');
+    const canvas = document.getElementById('circleCanvas');
+    const ctx = canvas.getContext('2d');
+    let centerX, centerY, radius;
+    let chart;
+    let isDrawing = false;
+    let animationFrameId;
+    let fireworksAnimationFrameId; // ID cho animation pháo hoa
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 128;
+    let source;
+    function connectAudioSource() {
+        if (!source) {
+            source = audioCtx.createMediaElementSource(audio);
+            source.connect(analyser);
+            analyser.connect(audioCtx.destination);
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const motivates = [
+      "Làm tốt lắm, chiến tiếp nào!",
+      "Một ngày gần hơn với giấc mơ!",
+      "Streamer không bao giờ bỏ cuộc!",
+      "Cố thêm chút nữa, đích đến gần rồi!",
+      "Tao tin mày sẽ thành công!"
+    ];
+
+    let history = JSON.parse(localStorage.getItem('saveLog') || '[]');
+    let totalSaved = parseInt(localStorage.getItem('totalSaved') || '0');
+    // Lấy mục tiêu từ localStorage, nếu không có thì mặc định 40 triệu
+    let target = parseInt(localStorage.getItem('savingGoal') || '40000000'); 
+
+    // ---- Fireworks Code (new) ----
+    const fireworksCanvas = document.getElementById('fireworksCanvas');
+    const fw_ctx = fireworksCanvas.getContext('2d');
+    let particles = [];
+    let fireworkRockets = [];
+    let isFireworksActive = false;
+
+    // Cài đặt kích thước canvas pháo hoa
+    function resizeFireworksCanvas() {
+        fireworksCanvas.width = window.innerWidth;
+        fireworksCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeFireworksCanvas);
+    resizeFireworksCanvas(); // Gọi lần đầu
+
+    class Particle {
+        constructor(x, y, color, speedX, speedY, decay) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            this.speedX = speedX;
+            this.speedY = speedY;
+            this.alpha = 1;
+            this.decay = decay || 0.015;
+            this.gravity = 0.05;
+            this.size = Math.random() * 2 + 1;
+        }
+
+        update() {
+            this.x += this.speedX;
+            this.y += this.speedY;
+            this.speedY += this.gravity;
+            this.alpha -= this.decay;
+            if (this.alpha < 0) this.alpha = 0;
+        }
+
+        draw() {
+            fw_ctx.save();
+            fw_ctx.beginPath();
+            fw_ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            fw_ctx.fillStyle = `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${this.alpha})`;
+            fw_ctx.fill();
+            fw_ctx.restore();
+        }
+    }
+
+    class FireworkRocket {
+        constructor(startX, startY, endX, endY, color) {
+            this.x = startX;
+            this.y = startY;
+            this.targetX = endX;
+            this.targetY = endY;
+            this.color = color;
+            this.distanceX = endX - startX;
+            this.distanceY = endY - startY;
+            this.distance = Math.sqrt(this.distanceX * this.distanceX + this.distanceY * this.distanceY);
+            this.speed = 2;
+            this.angle = Math.atan2(this.distanceY, this.distanceX);
+            this.velocity = {
+                x: Math.cos(this.angle) * this.speed,
+                y: Math.sin(this.angle) * this.speed
+            };
+            this.brightness = 0;
+            this.decay = 0.03;
+            this.alpha = 1;
+        }
+
+        update() {
+            this.x += this.velocity.x;
+            this.y += this.velocity.y;
+            this.brightness = Math.min(this.brightness + 0.1, 1);
+            this.alpha -= this.decay;
+            if (this.alpha < 0) this.alpha = 0;
+        }
+
+        draw() {
+            fw_ctx.save();
+            fw_ctx.beginPath();
+            fw_ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+            fw_ctx.fillStyle = `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${this.alpha})`;
+            fw_ctx.fill();
+            fw_ctx.restore();
+        }
+
+        explode() {
+            const numParticles = 80;
+            for (let i = 0; i < numParticles; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 8 + 2;
+                const p = new Particle(
+                    this.x, this.y,
+                    this.color,
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed
+                );
+                particles.push(p);
+            }
+        }
+    }
+
+    function randomColor() {
+        return {
+            r: Math.floor(Math.random() * 255),
+            g: Math.floor(Math.random() * 255),
+            b: Math.floor(Math.random() * 255)
+        };
+    }
+
+    function animateFireworks() {
+        if (!isFireworksActive) {
+            cancelAnimationFrame(fireworksAnimationFrameId);
+            return;
+        }
+
+        fireworksAnimationFrameId = requestAnimationFrame(animateFireworks);
+        fw_ctx.clearRect(0, 0, fireworksCanvas.width, fireworksCanvas.height);
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update();
+            if (particles[i].alpha <= 0) {
+                particles.splice(i, 1);
+            } else {
+                particles[i].draw();
+            }
+        }
+
+        for (let i = fireworkRockets.length - 1; i >= 0; i--) {
+            const rocket = fireworkRockets[i];
+            rocket.update();
+            rocket.draw();
+
+            if (Math.sqrt(Math.pow(rocket.x - rocket.targetX, 2) + Math.pow(rocket.y - rocket.targetY, 2)) < rocket.speed || rocket.alpha <= 0) {
+                rocket.explode();
+                fireworkRockets.splice(i, 1);
+            }
+        }
+
+        if (particles.length === 0 && fireworkRockets.length === 0) {
+            isFireworksActive = false;
+            fireworksCanvas.style.display = 'none';
+        }
+    }
+
+    function launchFireworks(count) {
+        fireworksCanvas.style.display = 'block';
+        isFireworksActive = true;
+        particles = [];
+        fireworkRockets = [];
+
+        for (let i = 0; i < count; i++) {
+            const startX = Math.random() * fireworksCanvas.width;
+            const startY = fireworksCanvas.height;
+            const endX = Math.random() * fireworksCanvas.width;
+            const endY = Math.random() * fireworksCanvas.height * 0.3; // Explode in upper 30%
+            fireworkRockets.push(new FireworkRocket(startX, startY, endX, endY, randomColor()));
+        }
+        animateFireworks(); // Bắt đầu animation
+        setTimeout(() => { // Tự động tắt sau 5-7 giây
+            isFireworksActive = false;
+        }, 5000 + Math.random() * 2000);
+    }
+    // ---- End Fireworks Code ----
+
+
+    // Hàm cập nhật kích thước canvas và các thông số vẽ
+    function resizeCanvas() {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+
+        centerX = canvas.width / 2;
+        centerY = canvas.height / 2;
+        
+        const avatar = document.getElementById('avatar');
+        let avatarHalfWidth = 0;
+        if (avatar) {
+            avatarHalfWidth = avatar.offsetWidth / 2; // ~80px
+        }
+        // Bán kính sóng nhạc: sát avatar hơn, chỉ cách 5px
+        radius = avatarHalfWidth + 5; 
+        // Đảm bảo radius không vượt quá giới hạn của canvas
+        radius = Math.min(radius, Math.min(canvas.width, canvas.height) / 2 - 10);
+    }
+
+    // Lắng nghe sự kiện resize cửa sổ để cập nhật canvas
+    window.addEventListener('resize', resizeCanvas);
+    // Gọi lần đầu khi tải trang
+    resizeCanvas();
+
+    function draw() {
+      if (!isDrawing) {
+        cancelAnimationFrame(animationFrameId);
+        return;
+      }
+      animationFrameId = requestAnimationFrame(draw);
+
+      analyser.getByteFrequencyData(dataArray);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const colorVar = '--text-' + (document.body.classList.contains('dark') ? 'dark' : 'light');
+      const stroke = getComputedStyle(document.body).getPropertyValue(colorVar).trim();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const angle = (i / bufferLength) * 2 * Math.PI;
+        const val = dataArray[i];
+        const lineLength = val / 3;
+        const x1 = centerX + Math.cos(angle) * radius;
+        const y1 = centerY + Math.sin(angle) * radius;
+        const x2 = centerX + Math.cos(angle) * (radius + lineLength);
+        const y2 = centerY + Math.sin(angle) * (radius + lineLength);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    }
+
+    function startNow() {
+      const intro = document.getElementById('intro');
+      intro.classList.add('hidden');
+
+      intro.addEventListener('transitionend', () => {
+          intro.style.display = 'none';
+      }, { once: true });
+
+      toggleMusic(); 
+      isDrawing = true;
+      draw();
+    }
+
+    function toggleMusic() {
+      connectAudioSource();
+      if (audio.paused) {
+        audio.play().then(() => {
+          isMusicPlaying = true;
+          document.querySelector('.top-controls button:nth-child(3)').textContent = '⏸️'; // Nút nhạc là thứ 3
+          isDrawing = true;
+          draw();
+        }).catch(e => console.error("Error playing audio:", e));
+      } else {
+        audio.pause();
+        isMusicPlaying = false;
+        document.querySelector('.top-controls button:nth-child(3)').textContent = '🎶'; // Nút nhạc là thứ 3
+        isDrawing = false;
+      }
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+      if (document.body.classList.contains('dark')) {
+          localStorage.setItem('theme', 'dark');
+      } else {
+          localStorage.setItem('theme', 'light');
+      }
+      updateChart();
+    }
+
+    // New: Hàm cài đặt mục tiêu
+    function setGoal() {
+        let newGoal = prompt(`Mục tiêu hiện tại của mày là ${target.toLocaleString()} VND. Nhập mục tiêu mới (VND):`, target);
+        if (newGoal === null || newGoal === '') return; // Bấm cancel hoặc để trống
+        
+        newGoal = parseInt(newGoal.replace(/\./g, '')); // Xóa dấu chấm nếu có
+        if (isNaN(newGoal) || newGoal <= 0) {
+            alert('Mục tiêu phải là một số hợp lệ và lớn hơn 0 nha mày!');
+            return;
+        }
+        target = newGoal;
+        localStorage.setItem('savingGoal', target);
+        updateDisplay();
+        alert(`Mục tiêu mới của mày là ${target.toLocaleString()} VND. Cố lên nhé!`);
+    }
+
+
+    function updateDisplay() {
+      const goalDisplay = document.getElementById('goalDisplay');
+      const statsBox = document.getElementById('statsBox');
+      goalDisplay.innerHTML = `Đã tiết kiệm: <b>${totalSaved.toLocaleString()} VND</b><br>Còn lại: <b>${Math.max(0, target - totalSaved).toLocaleString()} VND</b>`;
+      statsBox.innerHTML = `Số ngày nhập: <b>${history.length}</b><br>Trung bình/ngày: <b>${(totalSaved / (history.length || 1)).toLocaleString()} VND</b>`;
+      updateChart();
+    }
+
+    function updateChart() {
+      const ctxChart = document.getElementById('savingChart').getContext('2d');
+      if (chart) chart.destroy();
+
+      const textColor = document.body.classList.contains('dark') ?
+                        getComputedStyle(document.body).getPropertyValue('--text-dark') :
+                        getComputedStyle(document.body).getPropertyValue('--text-light');
+      const primaryColor = getComputedStyle(document.body).getPropertyValue('--primary');
+
+
+      chart = new Chart(ctxChart, {
+        type: 'line',
+        data: {
+          labels: history.map(h => h.date),
+          datasets: [{
+            label: 'Tiết kiệm mỗi ngày',
+            data: history.map(h => h.saved),
+            borderColor: primaryColor,
+            backgroundColor: 'rgba(0,255,195,0.2)',
+            tension: 0.4,
+            fill: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true, 
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) label += ': ';
+                        if (context.parsed.y !== null) {
+                            label += context.parsed.y.toLocaleString() + ' VND';
+                        }
+                        return label;
+                    }
+                }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(150,150,150,0.1)' },
+              ticks: { color: textColor }
+            },
+            x: {
+              grid: { color: 'rgba(150,150,150,0.1)' },
+              ticks: { color: textColor }
+            }
+          }
+        }
+      });
+    }
+
+    function showMotivate(message) { // Cập nhật để nhận thông điệp tùy chỉnh
+      const box = document.getElementById('motivateBox');
+      const msg = message || motivates[Math.floor(Math.random() * motivates.length)];
+      box.innerText = msg;
+      box.classList.add('show');
+      setTimeout(() => box.classList.remove('show'), 3000);
+    }
+
+    function saveData() {
+      const incomeInput = document.getElementById('income');
+      const spentInput = document.getElementById('spent');
+
+      const income = parseInt(incomeInput.value || '0');
+      const spent = parseInt(spentInput.value || '0');
+
+      if (isNaN(income) || isNaN(spent)) {
+          alert('Điền đầy đủ số tiền kiếm được và đã tiêu nha mày!');
+          return;
+      }
+      if (income < 0 || spent < 0) {
+          alert('Số tiền không thể là số âm nha mày!');
+          return;
+      }
+
+      const saved = income - spent;
+      const date = new Date().toLocaleDateString('vi-VN');
+
+      history.push({ date, income, spent, saved });
+      totalSaved += saved;
+
+      localStorage.setItem('saveLog', JSON.stringify(history));
+      localStorage.setItem('totalSaved', totalSaved);
+
+      incomeInput.value = '';
+      spentInput.value = '';
+      updateDisplay();
+      
+      // Check for goal completion
+      if (totalSaved >= target && totalSaved - saved < target) { // Chỉ thông báo khi vừa đạt mục tiêu
+          showMotivate("CHÚC MỪNG MÀY ĐÃ HOÀN THÀNH MỤC TIÊU! 🎉 Build PC thôi!");
+          launchFireworks(5); // Bắn 5 quả pháo hoa
+      } else {
+          showMotivate(); // Hiển thị thông báo động viên ngẫu nhiên
+      }
+    }
+
+    function resetData() {
+      if (!confirm('Mày có chắc muốn xoá toàn bộ dữ liệu tiết kiệm không? Không khôi phục được đâu đấy!')) return;
+      localStorage.removeItem('saveLog');
+      localStorage.removeItem('totalSaved');
+      history = [];
+      totalSaved = 0;
+      updateDisplay();
+    }
+
+    // Xử lý Page Visibility API
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (isMusicPlaying) {
+            audio.pause();
+            isDrawing = false;
+        }
+      } else {
+        if (isMusicPlaying && audio.paused) {
+            audio.play();
+            isDrawing = true;
+            draw();
+        }
+      }
+    });
+
+    // Khởi tạo hiển thị khi tải trang
+    updateDisplay();
+
+    // Kiểm tra và đặt lại theme khi tải lại trang
+    if (localStorage.getItem('theme') === 'dark') {
+      document.body.classList.add('dark');
+    }
+  </script>
+</body>
+</html>
